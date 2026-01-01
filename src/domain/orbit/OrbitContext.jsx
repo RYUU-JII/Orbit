@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo } from "react";
-import { useOrbitData } from "../hooks/useOrbitData";
+import { useOrbitData } from "./useOrbitData";
 
 const OrbitContext = createContext(null);
 

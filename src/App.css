@@ -146,6 +146,22 @@
   z-index: 10;
 }
 
+@keyframes orbit-settle-glow {
+  0% {
+    transform: translate3d(0, -6px, 0) scale(var(--orbit-settle-scale, 1.05));
+    box-shadow: 0 0 30px rgba(99, 102, 241, 0.35), 0 24px 60px rgba(0, 0, 0, 0.45);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    box-shadow: 0 0 0 rgba(99, 102, 241, 0), 0 14px 36px rgba(0, 0, 0, 0.3);
+  }
+}
+
+.orbit-settle-glow {
+  animation: orbit-settle-glow 480ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, box-shadow;
+}
+
 /* Reset base styles (avoid Tailwind conflicts) */
 button,
 input {

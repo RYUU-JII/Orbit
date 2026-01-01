@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { loadOrbitSettings, saveOrbitSettings } from "../lib/orbitStore";
+import { loadOrbitSettings, saveOrbitSettings } from "./orbitStore";
 
 export function useOrbitData() {
   const [projects, setProjects] = useState([]);
