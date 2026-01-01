@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+src-tauri/target/
+src-tauri/gen/
+.git/
+.vscode/
+.idea/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+*.log
+.DS_Store
+Thumbs.db
