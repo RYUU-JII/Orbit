@@ -1,0 +1,159 @@
+/* App.css */
+
+:root {
+  color: #f6f6f6;
+  background-color: #050810;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Background: nebula + parallax star drift */
+.stars-container {
+  position: relative;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(79, 70, 229, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 100% 100%, rgba(67, 56, 202, 0.08) 0%, transparent 40%),
+    #050810;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Stars: slow, unidirectional drift with layered parallax (seamless loop via tiled textures). */
+.stars-layer {
+  position: fixed;
+  top: -30vh;
+  left: -30vw;
+  width: 160vw;
+  height: 160vh;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+  transform: rotate(-12deg);
+  transform-origin: 50% 50%;
+}
+
+.stars-track {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate3d(-50%, -50%, 0);
+}
+
+.stars-drift {
+  display: grid;
+  grid-template-columns: repeat(2, var(--tile-x));
+  grid-template-rows: repeat(2, var(--tile-y));
+  width: calc(var(--tile-x) * 2);
+  height: calc(var(--tile-y) * 2);
+  animation: stars-drift var(--drift-duration) linear infinite;
+  will-change: transform;
+}
+
+.stars-tile {
+  width: var(--tile-x);
+  height: var(--tile-y);
+  background-image: var(--stars-texture);
+  background-size: var(--tile-x) var(--tile-y);
+  background-repeat: no-repeat;
+}
+
+@keyframes stars-drift {
+  from {
+    transform: translate3d(var(--start-x), var(--start-y), 0);
+  }
+  to {
+    transform: translate3d(calc(var(--start-x) - var(--tile-x)), var(--start-y), 0);
+  }
+}
+
+/* Layer 1 (farthest): dense tiny stars, slowest */
+.stars-layer-1 {
+  --tile-x: 1800px;
+  --tile-y: 1200px;
+  --start-x: 120px;
+  --start-y: 80px;
+  --drift-duration: 640s;
+  --stars-texture: url("./assets/stars-layer-1.svg");
+  opacity: 0.3;
+}
+
+/* Layer 2: mid distance */
+.stars-layer-2 {
+  --tile-x: 1400px;
+  --tile-y: 1000px;
+  --start-x: 420px;
+  --start-y: 260px;
+  --drift-duration: 420s;
+  --stars-texture: url("./assets/stars-layer-2.svg");
+  opacity: 0.37;
+}
+
+/* Layer 3: near stars (slightly larger) */
+.stars-layer-3 {
+  --tile-x: 1000px;
+  --tile-y: 800px;
+  --start-x: 160px;
+  --start-y: 510px;
+  --drift-duration: 300s;
+  --stars-texture: url("./assets/stars-layer-3.svg");
+  opacity: 0.47;
+}
+
+/* Layer 4 (highlights): sparse bright stars, fastest */
+.stars-layer-4 {
+  --tile-x: 720px;
+  --tile-y: 640px;
+  --start-x: 90px;
+  --start-y: 120px;
+  --drift-duration: 220s;
+  --stars-texture: url("./assets/stars-layer-4.svg");
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stars-drift {
+    animation: none;
+  }
+}
+
+/* Thin scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050810;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.4);
+}
+
+/* Text selection */
+::selection {
+  background-color: rgba(99, 102, 241, 0.4);
+  color: white;
+}
+
+/* React Root container */
+#root {
+  position: relative;
+  z-index: 10;
+}
+
+/* Reset base styles (avoid Tailwind conflicts) */
+button,
+input {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  color: inherit;
+  outline: none;
+}

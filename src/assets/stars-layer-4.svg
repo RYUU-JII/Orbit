@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 640">
+  <defs>
+    <filter id="spark" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="1.6" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <g fill="#ffffff">
+    <circle cx="86" cy="102" r="2.72" opacity="0.55" filter="url(#spark)"/>
+    <circle cx="188" cy="398" r="2.24" opacity="0.36"/>
+    <circle cx="304" cy="220" r="2.56" opacity="0.48" filter="url(#spark)"/>
+    <circle cx="442" cy="512" r="2.08" opacity="0.32"/>
+    <circle cx="594" cy="140" r="2.88" opacity="0.58" filter="url(#spark)"/>
+    <circle cx="628" cy="402" r="2.16" opacity="0.34"/>
+    <circle cx="124" cy="562" r="2.4" opacity="0.44" filter="url(#spark)"/>
+    <circle cx="372" cy="620" r="2.08" opacity="0.30"/>
+  </g>
+  <g fill="#e0e7ff" opacity="0.60">
+    <circle cx="512" cy="278" r="1.92"/>
+    <circle cx="264" cy="468" r="1.76"/>
+  </g>
+</svg>
+

@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 1000">
+  <g fill="#ffffff">
+    <circle cx="86" cy="124" r="1.12" opacity="0.40"/>
+    <circle cx="152" cy="402" r="0.96" opacity="0.28"/>
+    <circle cx="238" cy="818" r="1.28" opacity="0.34"/>
+    <circle cx="310" cy="236" r="0.88" opacity="0.22"/>
+    <circle cx="382" cy="664" r="1.2" opacity="0.30"/>
+    <circle cx="468" cy="510" r="0.96" opacity="0.24"/>
+    <circle cx="548" cy="150" r="1.36" opacity="0.36"/>
+    <circle cx="628" cy="356" r="0.88" opacity="0.22"/>
+    <circle cx="706" cy="892" r="1.12" opacity="0.28"/>
+    <circle cx="782" cy="578" r="0.96" opacity="0.24"/>
+    <circle cx="860" cy="228" r="1.44" opacity="0.40"/>
+    <circle cx="942" cy="448" r="0.88" opacity="0.22"/>
+    <circle cx="1022" cy="930" r="1.2" opacity="0.30"/>
+    <circle cx="1104" cy="632" r="0.96" opacity="0.24"/>
+    <circle cx="1182" cy="286" r="1.36" opacity="0.36"/>
+    <circle cx="1268" cy="520" r="0.88" opacity="0.22"/>
+    <circle cx="1340" cy="840" r="1.2" opacity="0.32"/>
+
+    <circle cx="120" cy="902" r="0.96" opacity="0.24"/>
+    <circle cx="204" cy="556" r="1.28" opacity="0.32"/>
+    <circle cx="286" cy="78" r="0.88" opacity="0.22"/>
+    <circle cx="364" cy="874" r="1.12" opacity="0.28"/>
+    <circle cx="442" cy="360" r="0.96" opacity="0.24"/>
+    <circle cx="520" cy="732" r="1.36" opacity="0.36"/>
+    <circle cx="596" cy="458" r="0.88" opacity="0.22"/>
+    <circle cx="676" cy="120" r="1.2" opacity="0.30"/>
+    <circle cx="754" cy="836" r="0.96" opacity="0.24"/>
+    <circle cx="832" cy="520" r="1.36" opacity="0.36"/>
+    <circle cx="914" cy="156" r="0.88" opacity="0.22"/>
+    <circle cx="992" cy="760" r="1.12" opacity="0.28"/>
+    <circle cx="1070" cy="420" r="0.96" opacity="0.24"/>
+    <circle cx="1152" cy="96" r="1.36" opacity="0.36"/>
+    <circle cx="1230" cy="888" r="1.12" opacity="0.28"/>
+    <circle cx="1312" cy="390" r="0.96" opacity="0.24"/>
+
+    <circle cx="68" cy="650" r="0.88" opacity="0.22"/>
+    <circle cx="182" cy="274" r="1.36" opacity="0.36"/>
+    <circle cx="328" cy="498" r="0.96" opacity="0.24"/>
+    <circle cx="454" cy="892" r="1.2" opacity="0.30"/>
+    <circle cx="602" cy="598" r="0.88" opacity="0.22"/>
+    <circle cx="740" cy="332" r="1.36" opacity="0.36"/>
+    <circle cx="886" cy="676" r="0.96" opacity="0.24"/>
+    <circle cx="1028" cy="304" r="1.2" opacity="0.30"/>
+    <circle cx="1166" cy="706" r="0.88" opacity="0.22"/>
+    <circle cx="1328" cy="128" r="1.36" opacity="0.36"/>
+  </g>
+</svg>
+
