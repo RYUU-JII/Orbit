@@ -1,0 +1,29 @@
+:root {
+  /* --- AI Theme Control Center --- */
+  /* 이 변수들의 값만 변경하면 앱 전체의 분위기가 바뀝니다. */
+
+  /* Brand Colors */
+  --color-primary: #4f46e5;       /* Main Action (Indigo-600) */
+  --color-primary-hover: #6366f1; /* Hover State (Indigo-500) */
+  --color-primary-dim: rgba(79, 70, 229, 0.1);
+  --color-primary-glow: rgba(79, 70, 229, 0.5);
+  --color-danger: #ef4444;
+
+  /* Backgrounds & Surfaces */
+  --bg-app: #0f172a;              /* Fallback background */
+  --surface-glass: rgba(255, 255, 255, 0.05);
+  --surface-glass-faint: rgba(255, 255, 255, 0.02);
+  --surface-glass-hover: rgba(99, 102, 241, 0.1);
+  --surface-border: rgba(255, 255, 255, 0.1);
+  
+  /* Typography */
+  --text-main: rgba(255, 255, 255, 0.9);
+  --text-muted: rgba(148, 163, 184, 1); /* slate-400 */
+  --text-faint: rgba(255, 255, 255, 0.2);
+  --text-on-primary: #ffffff;
+
+  /* Shapes */
+  --radius-lg: 1.5rem;  /* rounded-3xl */
+  --radius-md: 1rem;    /* rounded-2xl */
+  --radius-sm: 0.5rem;
+}
