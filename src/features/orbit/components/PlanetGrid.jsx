@@ -18,6 +18,8 @@ const HOLD_TO_DRAG_MS = 220;
 const DROP_ANIMATION_MS = 260;
 const SETTLE_ANIMATION_MS = 480;
 const OVERLAY_SCALE = 1.05;
+const SLOT_EXPAND_DELAY_MS = 150;
+const GALAXY_BOOT_STAGGER_MS = 90;
 
 export function PlanetGrid({
   galaxyId,
@@ -26,10 +28,13 @@ export function PlanetGrid({
   onAddProject,
   orchestrator,
   galaxyPulse,
+  galaxyBootSignal,
+  collapsePhase = "expanded",
   showAddCard = false,
 }) {
   const [activeId, setActiveId] = useState(null);
   const [overId, setOverId] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [dropIndicator, setDropIndicator] = useState(null);
   const gridRef = useRef(null);
   const [displayProjects, setDisplayProjects] = useState(() => projects);
@@ -43,7 +48,12 @@ export function PlanetGrid({
   const gridRectRef = useRef(null);
   const [isGalaxySyncing, setIsGalaxySyncing] = useState(false);
   const galaxySyncTimerRef = useRef(null);
+  const [isGalaxyBooting, setIsGalaxyBooting] = useState(false);
+  const galaxyBootTimerRef = useRef(null);
+  const isCollapsing = collapsePhase === "collapsing";
+  const lastOverRectRef = useRef(null);
   const skipOrchestratorUntilRef = useRef(0);
+  const settleTimerRef = useRef(null);
   const captureSnapshot = orchestrator?.captureSnapshot;
   const markLayoutShift = orchestrator?.markLayoutShift;
 
@@ -74,22 +84,30 @@ export function PlanetGrid({
         const snapshotRect = layoutSnapshotRef.current.get(activeId) || active.rect;
         const width = snapshotRect?.width ?? 0;
         const height = snapshotRect?.height ?? 0;
-        const scaleDelta = OVERLAY_SCALE - 1;
-        const xOffset = (width * scaleDelta) / 2;
-        const yOffset = (height * scaleDelta) / 2;
+        const targetRect = lastOverRectRef.current;
+        const initialLeft = snapshotRect?.left ?? 0;
+        const initialTop = snapshotRect?.top ?? 0;
 
-        const correctedFinal = {
-          ...transform.final,
-          x: transform.final.x - xOffset,
-          y: transform.final.y - yOffset,
-          scaleX: 1,
-          scaleY: 1,
+        const toCenteredTransform = (x, y) => {
+          if (!width || !height) {
+            return CSS.Transform.toString({ x, y, scaleX: 1, scaleY: 1 });
+          }
+          return `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%) scale(1)`;
         };
 
+        const startX = (transform.initial?.x ?? 0) + width / 2;
+        const startY = (transform.initial?.y ?? 0) + height / 2;
+        const finalX = targetRect
+          ? targetRect.left + targetRect.width / 2 - initialLeft
+          : (transform.final?.x ?? 0) + width / 2;
+        const finalY = targetRect
+          ? targetRect.top + targetRect.height / 2 - initialTop
+          : (transform.final?.y ?? 0) + height / 2;
+
         return [
-          { transform: CSS.Transform.toString(transform.initial), offset: 0 },
-          { transform: CSS.Transform.toString(correctedFinal), offset: landingOffset },
-          { transform: CSS.Transform.toString(correctedFinal), offset: 1 },
+          { transform: toCenteredTransform(startX, startY), offset: 0 },
+          { transform: toCenteredTransform(finalX, finalY), offset: landingOffset },
+          { transform: toCenteredTransform(finalX, finalY), offset: 1 },
         ];
       },
       sideEffects({ active, dragOverlay }) {
@@ -133,14 +151,17 @@ export function PlanetGrid({
   const updateDropIndicator = useCallback((over) => {
     if (!over || !gridRectRef.current) {
       setDropIndicator(null);
+      lastOverRectRef.current = null;
       return;
     }
     const overId = String(over.id);
     const initialRect = layoutSnapshotRef.current.get(overId);
     if (!initialRect) {
       setDropIndicator(null);
+      lastOverRectRef.current = null;
       return;
     }
+    lastOverRectRef.current = initialRect;
     setDropIndicator({
       width: initialRect.width,
       height: initialRect.height,
@@ -151,9 +172,14 @@ export function PlanetGrid({
 
   const handleDragStart = useCallback(
     (event) => {
+      if (settleTimerRef.current) {
+        clearTimeout(settleTimerRef.current);
+        settleTimerRef.current = null;
+      }
       captureLayoutSnapshot();
       setActiveId(event.active?.id ?? null);
       setOverId(event.over?.id ?? null);
+      setIsDragging(true);
       updateDropIndicator(event.over);
     },
     [captureLayoutSnapshot, updateDropIndicator]
@@ -171,6 +197,12 @@ export function PlanetGrid({
     setActiveId(null);
     setOverId(null);
     setDropIndicator(null);
+    lastOverRectRef.current = null;
+    setIsDragging(false);
+    if (settleTimerRef.current) {
+      clearTimeout(settleTimerRef.current);
+      settleTimerRef.current = null;
+    }
   }, []);
 
   const handleDragEnd = useCallback(
@@ -183,10 +215,20 @@ export function PlanetGrid({
           onReorder(arrayMove(displayProjects, oldIndex, newIndex));
         }
       }
-      setActiveId(null);
       setOverId(null);
       setDropIndicator(null);
+      setIsDragging(false);
       skipOrchestratorUntilRef.current = performance.now() + DROP_ANIMATION_MS + SETTLE_ANIMATION_MS;
+      if (settleTimerRef.current) {
+        clearTimeout(settleTimerRef.current);
+        settleTimerRef.current = null;
+      }
+      const settleDuration = DROP_ANIMATION_MS + SETTLE_ANIMATION_MS;
+      settleTimerRef.current = setTimeout(() => {
+        setActiveId(null);
+        lastOverRectRef.current = null;
+        settleTimerRef.current = null;
+      }, settleDuration);
     },
     [displayProjects, onReorder]
   );
@@ -230,7 +272,7 @@ export function PlanetGrid({
 
     const start = setTimeout(() => {
       setAppearStageByPath((prev) => ({ ...prev, [path]: "animate" }));
-    }, 50);
+    }, SLOT_EXPAND_DELAY_MS);
 
     const cleanup = setTimeout(() => {
       setAppearStageByPath((prev) => {
@@ -310,6 +352,22 @@ export function PlanetGrid({
   }, [galaxyPulse]);
 
   useEffect(() => {
+    if (galaxyBootSignal === undefined) return;
+    setIsGalaxyBooting(true);
+    if (galaxyBootTimerRef.current) {
+      clearTimeout(galaxyBootTimerRef.current);
+    }
+    galaxyBootTimerRef.current = setTimeout(() => {
+      setIsGalaxyBooting(false);
+    }, 1400);
+    return () => {
+      if (galaxyBootTimerRef.current) {
+        clearTimeout(galaxyBootTimerRef.current);
+      }
+    };
+  }, [galaxyBootSignal]);
+
+  useEffect(() => {
     return () => {
       vanishOverlayTimersRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
       vanishOverlayTimersRef.current.clear();
@@ -320,6 +378,12 @@ export function PlanetGrid({
       appearTimersRef.current.clear();
       if (galaxySyncTimerRef.current) {
         clearTimeout(galaxySyncTimerRef.current);
+      }
+      if (settleTimerRef.current) {
+        clearTimeout(settleTimerRef.current);
+      }
+      if (galaxyBootTimerRef.current) {
+        clearTimeout(galaxyBootTimerRef.current);
       }
     };
   }, []);
@@ -338,7 +402,9 @@ export function PlanetGrid({
     >
       <div
         ref={gridRef}
-        className={`relative w-full ${isGalaxySyncing ? "orbit-galaxy-sync" : ""}`}
+        className={`relative w-full ${isGalaxySyncing ? "orbit-galaxy-sync" : ""} ${
+          isCollapsing ? "orbit-galaxy-collapse" : ""
+        }`}
         data-galaxy-id={galaxyId}
       >
         {showEmptyPlaceholder ? (
@@ -354,13 +420,17 @@ export function PlanetGrid({
                   const stage = appearStageByPath[project.path];
                   const shouldAnimate = stage === "animate";
                   const innerClassName = shouldAnimate ? "animate-card-appear" : undefined;
+                  const slotClassName = stage ? "animate-slot-expand" : undefined;
+                  const staggerDelayMs =
+                    shouldAnimate && isGalaxyBooting ? appearIndex++ * GALAXY_BOOT_STAGGER_MS : 0;
                   const innerStyle = stage
                     ? {
                         opacity: 0,
-                        ...(shouldAnimate ? { animationDelay: `${appearIndex++ * 0.08}s` } : {}),
+                        ...(shouldAnimate ? { animationDelay: `${staggerDelayMs}ms` } : {}),
                       }
                     : undefined;
                   const isActive = activeId === project.path;
+                  const shouldSkipOrchestrator = isCollapsing || isActive;
 
                   return (
                     <div
@@ -370,17 +440,20 @@ export function PlanetGrid({
                         else gridItemRefs.current.delete(project.path);
                       }}
                       data-orbit-planet={project.path}
-                      data-orbit-skip={isActive ? "true" : undefined}
+                      data-orbit-skip={shouldSkipOrchestrator ? "true" : undefined}
                       data-galaxy-id={galaxyId}
                       style={{ width: "100%" }}
                     >
-                      <div className={innerClassName} style={innerStyle}>
-                        <ProjectCard
-                          project={project}
-                          isSorting={Boolean(activeId)}
-                          isDropTarget={Boolean(activeId) && overId === project.path && overId !== activeId}
-                          onVanishStart={handleVanishStart}
-                        />
+                      <div className={slotClassName} style={{ width: "100%" }}>
+                        <div className={innerClassName} style={innerStyle}>
+                          <ProjectCard
+                            project={project}
+                          isSorting={isDragging}
+                          isDropTarget={isDragging && overId === project.path && overId !== activeId}
+                            isVanishing={isCollapsing}
+                            onVanishStart={handleVanishStart}
+                          />
+                        </div>
                       </div>
                     </div>
                   );
@@ -431,12 +504,13 @@ export function PlanetGrid({
 
       <DragOverlay
         dropAnimation={dropAnimation}
-        adjustScale={true}
+        adjustScale={false}
         className="orbit-overlay"
         style={{
           "--orbit-overlay-scale": String(OVERLAY_SCALE),
           "--orbit-drop-duration": `${DROP_ANIMATION_MS}ms`,
           "--orbit-settle-duration": `${SETTLE_ANIMATION_MS}ms`,
+          transformOrigin: "center center",
         }}
       >
         {activeProject ? <ProjectCardPreview project={activeProject} /> : null}

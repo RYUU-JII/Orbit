@@ -3,14 +3,27 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 const FLIP_DURATION_MS = 520;
 const FLIP_EASING = "cubic-bezier(0.2, 0.8, 0.2, 1)";
 
+const toScrollSpaceRect = (container, node, containerRect, scrollLeft, scrollTop) => {
+  const rect = node.getBoundingClientRect();
+  return {
+    left: rect.left - containerRect.left + scrollLeft,
+    top: rect.top - containerRect.top + scrollTop,
+    width: rect.width,
+    height: rect.height,
+  };
+};
+
 const collectRects = (container) => {
   const snapshot = new Map();
   if (!container) return snapshot;
+  const containerRect = container.getBoundingClientRect();
+  const scrollLeft = container.scrollLeft || 0;
+  const scrollTop = container.scrollTop || 0;
   container.querySelectorAll("[data-orbit-planet]").forEach((node) => {
     if (node.dataset.orbitSkip === "true") return;
     const id = node.dataset.orbitPlanet;
     if (!id) return;
-    snapshot.set(id, node.getBoundingClientRect());
+    snapshot.set(id, toScrollSpaceRect(container, node, containerRect, scrollLeft, scrollTop));
   });
   return snapshot;
 };
@@ -43,11 +56,17 @@ export function useUniverseOrchestrator() {
     if (!container) return;
 
     const nextEntries = new Map();
+    const containerRect = container.getBoundingClientRect();
+    const scrollLeft = container.scrollLeft || 0;
+    const scrollTop = container.scrollTop || 0;
     container.querySelectorAll("[data-orbit-planet]").forEach((node) => {
       if (node.dataset.orbitSkip === "true") return;
       const id = node.dataset.orbitPlanet;
       if (!id) return;
-      nextEntries.set(id, { rect: node.getBoundingClientRect(), node });
+      nextEntries.set(id, {
+        rect: toScrollSpaceRect(container, node, containerRect, scrollLeft, scrollTop),
+        node,
+      });
     });
 
     const sourceRects =
