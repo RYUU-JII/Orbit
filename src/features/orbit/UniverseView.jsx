@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useOrbitContext } from "../../domain/orbit/OrbitContext";
 import { StarBackground } from "../../ui/StarBackground";
@@ -7,6 +7,7 @@ import { EmptyState } from "./components/EmptyState";
 import { useUniverseOrchestrator } from "./hooks/useUniverseOrchestrator";
 
 export function UniverseView() {
+  const COLLAPSE_DURATION_MS = 650;
   const {
     projects,
     paths,
@@ -19,24 +20,97 @@ export function UniverseView() {
   } = useOrbitContext();
 
   const orchestrator = useUniverseOrchestrator();
+  const galaxyCacheRef = useRef(new Map());
+  const collapseTimersRef = useRef(new Map());
+  const prevEnabledRef = useRef(new Map());
+  const prevCountsRef = useRef(new Map());
+  const hasSeededCountsRef = useRef(false);
+  const [collapsingGalaxies, setCollapsingGalaxies] = useState({});
+  const [galaxyBootSignals, setGalaxyBootSignals] = useState({});
+  const [galaxyHeaderSignals, setGalaxyHeaderSignals] = useState({});
 
-  const galaxies = useMemo(() => {
-    const activePaths = paths.filter((path) => path.enabled);
-    const activeSet = new Set(activePaths.map((path) => path.path));
-    const grouped = new Map(activePaths.map((path) => [path.path, []]));
-
+  const groupedByPath = useMemo(() => {
+    const grouped = new Map();
     projects.forEach((project) => {
       const sourcePath = project.source_path || project.sourcePath;
-      if (!sourcePath || !activeSet.has(sourcePath)) return;
+      if (!sourcePath) return;
       if (!grouped.has(sourcePath)) grouped.set(sourcePath, []);
       grouped.get(sourcePath).push(project);
     });
+    return grouped;
+  }, [projects]);
 
-    return activePaths.map((path) => ({
-      path: path.path,
-      projects: grouped.get(path.path) || [],
-    }));
-  }, [paths, projects]);
+  useEffect(() => {
+    groupedByPath.forEach((value, path) => {
+      galaxyCacheRef.current.set(path, value);
+    });
+  }, [groupedByPath]);
+
+  useEffect(() => {
+    const nextEnabled = new Map(paths.map((path) => [path.path, path.enabled]));
+    nextEnabled.forEach((enabled, path) => {
+      const prevEnabled = prevEnabledRef.current.get(path);
+      if (enabled && !prevEnabled) {
+        setGalaxyBootSignals((prev) => ({
+          ...prev,
+          [path]: (prev[path] || 0) + 1,
+        }));
+      }
+    });
+    prevEnabledRef.current = nextEnabled;
+  }, [paths]);
+
+  useEffect(() => {
+    const nextCounts = new Map();
+    paths.forEach((path) => {
+      if (!path.enabled) return;
+      const count = groupedByPath.get(path.path)?.length || 0;
+      nextCounts.set(path.path, count);
+    });
+
+    if (!hasSeededCountsRef.current) {
+      prevCountsRef.current = nextCounts;
+      hasSeededCountsRef.current = true;
+      return;
+    }
+
+    nextCounts.forEach((count, path) => {
+      const prev = prevCountsRef.current.get(path) || 0;
+      if (count > prev) {
+        setGalaxyHeaderSignals((prevSignals) => ({
+          ...prevSignals,
+          [path]: (prevSignals[path] || 0) + 1,
+        }));
+      }
+    });
+
+    prevCountsRef.current = nextCounts;
+  }, [groupedByPath, paths]);
+
+  useEffect(() => {
+    return () => {
+      collapseTimersRef.current.forEach((timer) => clearTimeout(timer));
+      collapseTimersRef.current.clear();
+    };
+  }, []);
+
+  const galaxies = useMemo(() => {
+    return paths
+      .map((path) => {
+        const collapseEntry = collapsingGalaxies[path.path];
+        if (!path.enabled && !collapseEntry) return null;
+        const projectsForGalaxy = path.enabled
+          ? groupedByPath.get(path.path) || []
+          : collapseEntry?.projects || [];
+        return {
+          path: path.path,
+          enabled: path.enabled,
+          isCollapsing: Boolean(collapseEntry),
+          projects: projectsForGalaxy,
+        };
+      })
+      .filter(Boolean);
+  }, [collapsingGalaxies, groupedByPath, paths]);
 
   const handleAddFolders = useCallback(async () => {
     try {
@@ -80,11 +154,44 @@ export function UniverseView() {
 
   const handleTogglePath = useCallback(
     (index, pathValue) => {
+      const target = paths[index];
+      if (!target) return;
       orchestrator.captureSnapshot();
       orchestrator.notifyGalaxyToggle(pathValue);
+
+      if (target.enabled) {
+        const cachedProjects = galaxyCacheRef.current.get(pathValue) || [];
+        setCollapsingGalaxies((prev) => ({
+          ...prev,
+          [pathValue]: { projects: cachedProjects },
+        }));
+        const existingTimer = collapseTimersRef.current.get(pathValue);
+        if (existingTimer) clearTimeout(existingTimer);
+        const timer = setTimeout(() => {
+          setCollapsingGalaxies((prev) => {
+            const next = { ...prev };
+            delete next[pathValue];
+            return next;
+          });
+          collapseTimersRef.current.delete(pathValue);
+        }, COLLAPSE_DURATION_MS);
+        collapseTimersRef.current.set(pathValue, timer);
+      } else if (collapsingGalaxies[pathValue]) {
+        setCollapsingGalaxies((prev) => {
+          const next = { ...prev };
+          delete next[pathValue];
+          return next;
+        });
+        const existingTimer = collapseTimersRef.current.get(pathValue);
+        if (existingTimer) {
+          clearTimeout(existingTimer);
+          collapseTimersRef.current.delete(pathValue);
+        }
+      }
+
       togglePath(index);
     },
-    [orchestrator, togglePath]
+    [collapsingGalaxies, orchestrator, paths, togglePath]
   );
 
   const handleDeletePath = useCallback(
@@ -103,13 +210,17 @@ export function UniverseView() {
   }, [orchestrator, restoreExcluded]);
 
   const showGlobalEmpty = galaxies.length === 0;
-  const lastGalaxyPath = galaxies[galaxies.length - 1]?.path;
+  const activeGalaxies = galaxies.filter((galaxy) => galaxy.enabled);
+  const lastGalaxyPath = activeGalaxies[activeGalaxies.length - 1]?.path;
 
   return (
-    <div className="stars-container min-h-screen p-10 font-sans selection:bg-indigo-500/30">
+    <div
+      ref={orchestrator.universeRef}
+      className="stars-container min-h-screen p-10 font-sans selection:bg-indigo-500/30"
+    >
       <StarBackground />
 
-      <div ref={orchestrator.universeRef} className="relative z-10">
+      <div className="relative z-10">
         <header className="max-w-6xl mx-auto mb-12">
           <div className="flex justify-between items-end mb-10">
             <div style={{ color: "var(--text-main)" }}>
@@ -237,7 +348,11 @@ export function UniverseView() {
                 onAddProject={handleManualIgnition}
                 orchestrator={orchestrator}
                 galaxyPulse={orchestrator.galaxySignals[galaxy.path]}
-                showAddCard={galaxy.path === lastGalaxyPath}
+                galaxyBootSignal={galaxyBootSignals[galaxy.path]}
+                headerPulseSignal={galaxyHeaderSignals[galaxy.path]}
+                collapseState={galaxy.isCollapsing ? "collapsing" : "expanded"}
+                isLastGalaxy={galaxy.path === lastGalaxyPath && galaxy.enabled}
+                showAddCard={galaxy.path === lastGalaxyPath && galaxy.enabled}
               />
             ))}
           </div>
