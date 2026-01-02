@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -124,6 +124,7 @@ function ProjectCardFrame({
   activeIdeId,
   typeMeta,
   TypeIcon,
+  dataProjectId = project.path,
   showMenu,
   setShowMenu = noop,
   onExclude = noop,
@@ -131,13 +132,15 @@ function ProjectCardFrame({
   onOpenProject = noop,
   onOpenFile = noop,
   onOpenExplorer = noop,
-  containerProps,
+  outerProps,
+  cardProps,
   disableHoverMotion = false,
   isDropTarget = false,
-  isSettling = false,
+  isVanishing = false,
   interactive = true,
 }) {
-  const { className, style, ...rest } = containerProps || {};
+  const { className: outerClassName, style: outerStyle, ...outerRest } = outerProps || {};
+  const { className: cardClassName, style: cardStyle, ...cardRest } = cardProps || {};
   const baseStyle = {
     backgroundColor: "var(--surface-glass)",
     borderColor: "var(--surface-border)",
@@ -145,25 +148,32 @@ function ProjectCardFrame({
   };
 
   const rootClassName = [
-    "group relative origin-center backdrop-blur-xl border transition-[box-shadow,transform] duration-300 shadow-lg hover:shadow-2xl overflow-hidden",
+    "group relative origin-center backdrop-blur-xl border transition-[box-shadow,transform] duration-700 ease-in-out shadow-lg hover:shadow-2xl overflow-hidden",
     typeMeta.border,
     interactive ? "cursor-pointer select-none touch-none" : "pointer-events-none",
     !disableHoverMotion && interactive ? "hover:-translate-y-1" : "",
     isDropTarget ? "ring-1 ring-indigo-400/40 shadow-[0_0_24px_rgba(99,102,241,0.18)]" : "",
-    isSettling ? "orbit-settle-glow" : "",
-    className,
+    isVanishing ? "animate-card-vanish pointer-events-none" : "",
+    cardClassName,
   ].filter(Boolean).join(" ");
 
   return (
     <div
-      {...rest}
-      style={{ ...baseStyle, ...style }}
-      data-project-id={project.path}
-      onClick={interactive ? onOpenProject : undefined}
-      onContextMenu={interactive ? (e) => { e.preventDefault(); setShowMenu(true); } : undefined}
-      className={rootClassName}
+      data-project-id={dataProjectId || undefined}
+      {...outerRest}
+      className={outerClassName}
+      style={outerStyle}
     >
-      <div className={`absolute inset-0 bg-gradient-to-br ${typeMeta.bg} opacity-40 group-hover:opacity-100 transition-opacity duration-500`} />
+      <div
+        {...cardRest}
+        style={{ ...baseStyle, ...cardStyle }}
+        onClick={interactive ? onOpenProject : undefined}
+        onContextMenu={interactive ? (e) => { e.preventDefault(); setShowMenu(true); } : undefined}
+        className={rootClassName}
+      >
+      <div
+        className={`absolute inset-0 bg-gradient-to-br ${typeMeta.bg} opacity-40 transition-opacity duration-500`}
+      />
       <div className="absolute -right-6 -bottom-6 opacity-[0.03] group-hover:opacity-[0.1] transition-all duration-700 transform rotate-[-15deg] group-hover:rotate-0 group-hover:scale-110">
         <TypeIcon size={140} />
       </div>
@@ -231,38 +241,42 @@ function ProjectCardFrame({
           </div>
         </div>
       </div>
+      </div>
     </div>
   );
 }
 
 // --- 상수 설정 ---
-const HOLD_TO_DRAG_MS = 300;
-const DROP_ANIMATION_MS = 260;
-const SETTLE_GLOW_MS = 480;
-const SETTLE_SCALE = 1.05;
+const HOLD_TO_DRAG_MS = 220;
 
 // --- 7. 메인 컴포넌트 ---
-export function ProjectCard({ project, isSorting = false, isDropTarget = false }) {
+export function ProjectCard({
+  project,
+  isSorting = false,
+  isDropTarget = false,
+  isVanishing: isVanishingProp = false,
+  onVanishStart = noop,
+}) {
   const [showMenu, setShowMenu] = useState(false);
-  const [isSettling, setIsSettling] = useState(false);
+  const [isVanishingLocal, setIsVanishingLocal] = useState(false);
   const { excludeProject, preferredIdes, setProjectIde } = useOrbitContext();
   const pressStartedAtRef = useRef(0);
-  const wasDraggingRef = useRef(false);
-  const settleTimerRef = useRef(null);
+  const vanishTimeoutRef = useRef(null);
+  const isVanishing = isVanishingProp || isVanishingLocal;
 
-  const clearSettleTimers = useCallback(() => {
-    if (settleTimerRef.current) {
-      clearTimeout(settleTimerRef.current);
-      settleTimerRef.current = null;
-    }
-  }, []);
+  useEffect(() => {
+    return () => {
+      if (vanishTimeoutRef.current && !isVanishingLocal) {
+        clearTimeout(vanishTimeoutRef.current);
+      }
+    };
+  }, [isVanishingLocal]);
 
   const autoDetectedIde = project.ides?.includes("jetbrains") ? resolveJetBrainsIde(project.techs) : (project.ides?.[0] || "vscode");
   const activeIdeId = preferredIdes[project.path] || autoDetectedIde;
   const typeMeta = TYPE_META[project.project_type] || TYPE_META.unknown;
 
   const handlePointerDown = (event) => {
-    if (isSettling) return; // 애니메이션 도중 중복 드래그 방지
     if (event.button !== 0) return;
     pressStartedAtRef.current = performance.now();
   };
@@ -271,55 +285,34 @@ export function ProjectCard({ project, isSorting = false, isDropTarget = false }
 
   const handleOpenProject = (e) => {
     e.stopPropagation();
-    if (isSettling || shouldSuppressClick()) return;
+    if (shouldSuppressClick()) return;
     invoke("open_project", { path: project.path, ideId: activeIdeId, targetFile: null });
   };
 
   const handleOpenFile = (e) => {
     e.stopPropagation();
-    if (isSettling || shouldSuppressClick() || !project.last_modified_file) return;
+    if (shouldSuppressClick() || !project.last_modified_file) return;
     invoke("open_project", { path: project.path, ideId: activeIdeId, targetFile: project.last_modified_file });
   };
 
   const handleOpenExplorer = (e) => {
     e.stopPropagation();
-    if (isSettling || shouldSuppressClick()) return;
+    if (shouldSuppressClick()) return;
     invoke("open_in_explorer", { path: project.path });
   };
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: project.path,
+    disabled: isVanishing,
     animateLayoutChanges: ({ isDragging, isSorting }) => isDragging || isSorting,
   });
 
-  useEffect(() => {
-    if (wasDraggingRef.current && !isDragging) {
-      clearSettleTimers();
-      
-      // 드롭 애니메이션 종료 시점에 Glow 효과 시작
-      settleTimerRef.current = setTimeout(() => {
-        setIsSettling(true);
-        settleTimerRef.current = setTimeout(() => {
-          setIsSettling(false);
-        }, SETTLE_GLOW_MS);
-      }, DROP_ANIMATION_MS);
-
-    } else if (isDragging) {
-      setIsSettling(false);
-      clearSettleTimers();
-    }
-    wasDraggingRef.current = isDragging;
-  }, [clearSettleTimers, isDragging]);
-
-  useEffect(() => () => clearSettleTimers(), [clearSettleTimers]);
-
   const dndStyle = {
-    transform: CSS.Transform.toString(transform), // transform 상시 유지
-    transition: isDragging ? "none" : transition, // 드래깅 아닐 때는 transition 허용하여 부드럽게 이동
+    transform: CSS.Transform.toString(transform),
+    transition: isDragging ? "none" : transition,
     zIndex: isDragging ? 100 : "auto",
     opacity: isDragging ? 0 : 1,
     willChange: "transform, box-shadow",
-    "--orbit-settle-scale": String(SETTLE_SCALE),
     transformOrigin: "center center",
   };
 
@@ -331,22 +324,29 @@ export function ProjectCard({ project, isSorting = false, isDropTarget = false }
       TypeIcon={typeMeta.icon}
       showMenu={showMenu}
       setShowMenu={setShowMenu}
-      onExclude={excludeProject}
+      onExclude={() => {
+        if (isVanishing) return;
+        setIsVanishingLocal(true);
+        onVanishStart(project);
+        vanishTimeoutRef.current = setTimeout(() => {
+          excludeProject(project.path);
+        }, 700);
+      }}
       onSetIde={setProjectIde}
       onOpenProject={handleOpenProject}
       onOpenFile={handleOpenFile}
       onOpenExplorer={handleOpenExplorer}
-      disableHoverMotion={isSorting || isSettling}
+      disableHoverMotion={isSorting}
       isDropTarget={isDropTarget}
-      isSettling={isSettling}
-      containerProps={{
+      isVanishing={isVanishing}
+      outerProps={{
         ref: setNodeRef,
         style: dndStyle,
         onPointerDownCapture: handlePointerDown,
         ...attributes,
         ...listeners,
       }}
-      interactive
+      interactive={!isVanishing}
     />
   );
 }
@@ -364,9 +364,10 @@ export function ProjectCardPreview({ project }) {
       typeMeta={typeMeta}
       TypeIcon={typeMeta.icon}
       showMenu={false}
-      containerProps={{
-        className: "origin-center transition-[transform,box-shadow] duration-150 ease-out",
-        style: { transform: `scale(${SETTLE_SCALE})`, boxShadow: "0 0 30px rgba(99, 102, 241, 0.35), 0 24px 60px rgba(0, 0, 0, 0.45)" },
+      dataProjectId={null}
+      cardProps={{
+        "data-orbit-preview": true,
+        className: "origin-center",
       }}
       interactive={false}
     />

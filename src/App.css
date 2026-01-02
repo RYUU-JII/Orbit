@@ -146,20 +146,27 @@
   z-index: 10;
 }
 
-@keyframes orbit-settle-glow {
+@keyframes orbit-overlay-settle {
   0% {
-    transform: translate3d(0, -6px, 0) scale(var(--orbit-settle-scale, 1.05));
+    transform: scale(var(--orbit-overlay-scale, 1.05));
     box-shadow: 0 0 30px rgba(99, 102, 241, 0.35), 0 24px 60px rgba(0, 0, 0, 0.45);
   }
   100% {
-    transform: translate3d(0, 0, 0) scale(1);
+    transform: scale(1);
     box-shadow: 0 0 0 rgba(99, 102, 241, 0), 0 14px 36px rgba(0, 0, 0, 0.3);
   }
 }
 
-.orbit-settle-glow {
-  animation: orbit-settle-glow 480ms cubic-bezier(0.4, 0, 0.2, 1);
+.orbit-overlay [data-orbit-preview] {
+  transform: scale(var(--orbit-overlay-scale, 1.05));
+  box-shadow: 0 0 30px rgba(99, 102, 241, 0.35), 0 24px 60px rgba(0, 0, 0, 0.45);
   will-change: transform, box-shadow;
+  transform-origin: center center;
+}
+
+.orbit-overlay.orbit-overlay-settling [data-orbit-preview] {
+  animation: orbit-overlay-settle var(--orbit-settle-duration, 480ms)
+    cubic-bezier(0.4, 0, 0.2, 1) var(--orbit-drop-duration, 260ms) both;
 }
 
 /* Reset base styles (avoid Tailwind conflicts) */
@@ -172,4 +179,99 @@ input {
   font-family: inherit;
   color: inherit;
   outline: none;
+}
+
+/* Card nebula appear animation */
+@keyframes card-nebula-appear {
+  0% {
+    opacity: 0;
+    transform: scale(0.6) translateY(36px);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1.08) translateY(-6px);
+  }
+  70% {
+    transform: scale(0.98) translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-card-appear {
+  position: relative;
+  overflow: visible;
+  padding: 0;
+  margin: 0;
+  animation: card-nebula-appear 1.1s cubic-bezier(0.18, 0.9, 0.16, 1) forwards;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+.animate-card-appear::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg, 18px);
+  border: 1px solid rgba(247, 231, 206, 0);
+  opacity: 0;
+  transform: scale(1);
+  filter: blur(4px);
+  pointer-events: none;
+  animation: card-nebula-glow 1.1s cubic-bezier(0.18, 0.9, 0.16, 1) forwards;
+}
+
+/* Card nebula glow animation */
+@keyframes card-nebula-glow {
+  0% {
+    opacity: 0;
+    transform: scale(1);
+    border-color: rgba(247, 231, 206, 0);
+    box-shadow: 0 0 0 rgba(247, 231, 206, 0), inset 0 0 0 rgba(247, 231, 206, 0);
+  }
+  20% {
+    opacity: 1;
+    transform: scale(1);
+    border-color: rgba(247, 231, 206, 0.85);
+    box-shadow: 0 0 18px 2px rgba(247, 231, 206, 0.8),
+      inset 0 0 10px rgba(247, 231, 206, 0.5);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+    border-color: rgba(247, 231, 206, 0);
+    box-shadow: 0 0 0 rgba(247, 231, 206, 0), inset 0 0 0 rgba(247, 231, 206, 0);
+  }
+}
+
+/* Card blackhole advanced animation */
+@keyframes card-singularity-warp {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  20% {
+    transform: scale(1.04);
+  }
+  80% {
+    opacity: 1;
+    transform: scale(0.2);
+  }
+  95% {
+    opacity: 0.3;
+    transform: scale(0.12);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0);
+  }
+}
+
+.animate-card-vanish {
+  animation: card-singularity-warp 0.7s linear forwards;
+  will-change: transform, opacity;
+  transform-origin: center center;
+  pointer-events: none;
 }
