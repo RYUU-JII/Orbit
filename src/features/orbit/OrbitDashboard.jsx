@@ -15,13 +15,42 @@ export function OrbitDashboard() {
     deletePath, 
     restoreExcluded
   } = useOrbitContext();
-
-  // 궤도 경로 추가 핸들러
+  
+  // 경로 추가 핸들러
   const handleAddFolders = useCallback(async () => {
-    const selected = await open({ multiple: true, directory: true, title: "Orbit 궤도 추가" });
-    if (!selected) return;
-    const newPathsArray = Array.isArray(selected) ? selected : [selected];
-    addPaths(newPathsArray);
+    try {
+      const selected = await open({ 
+        multiple: true, 
+        directory: true, 
+        title: "Orbit 궤도 추가: 프로젝트 폴더 선택" 
+      });
+
+      if (!selected) return;
+      const newPathsArray = Array.isArray(selected) ? selected : [selected];
+      addPaths(newPathsArray);
+      
+      console.debug("[orbit] New paths added to orbit:", newPathsArray);
+    } catch (error) {
+      console.error("[orbit] Failed to add folders:", error);
+    }
+  }, [addPaths]);
+
+  const handleManualIgnition = useCallback(async () => {
+    try {
+      const selected = await open({ 
+        multiple: false, 
+        directory: true, 
+        title: "Orbit manual ignition: select project folder" 
+      });
+
+      if (!selected) return;
+      const newPathsArray = Array.isArray(selected) ? selected : [selected];
+      addPaths(newPathsArray);
+      
+      console.debug("[orbit] Manual project ignition:", newPathsArray);
+    } catch (error) {
+      console.error("[orbit] Failed to add project:", error);
+    }
   }, [addPaths]);
 
   return (
@@ -55,42 +84,49 @@ export function OrbitDashboard() {
                 }}
               />
               <span className="relative z-10 flex items-baseline gap-2">
-                <span>+ Add Orbit Paths</span>
+                <span>+ Expand Radar Fields</span>
               </span>
             </button>
           </div>
-
           {/* ??? 경로 관리 섹션 */}
           <div className="flex flex-wrap gap-3 py-6 border-y" style={{ borderColor: "var(--surface-border)" }}>
             {paths.length > 0 ? (
-              paths.map((p, i) => (
-                <div 
-                  key={p.path} 
-                  className="group flex items-center gap-4 px-4 py-1.5 border transition-all duration-500 backdrop-blur-md"
-                  style={{
-                    borderRadius: "var(--radius-lg)",
-                    backgroundColor: p.enabled ? "rgba(79, 70, 229, 0.04)" : "var(--surface-glass)",
-                    borderColor: p.enabled ? "rgba(99, 102, 241, 0.35)" : "var(--surface-border)",
-                    color: p.enabled ? "var(--text-main)" : "var(--text-faint)",
-                  }}
+              <>
+                <span
+                  className="px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.35em] border"
+                  style={{ borderColor: "var(--surface-border)", color: "var(--text-faint)" }}
                 >
+                  Active Radar Zones
+                </span>
+                {paths.map((p, i) => (
                   <div 
-                    onClick={() => togglePath(i)}
-                    className="w-7 h-3.5 rounded-full relative transition-all duration-500 cursor-pointer opacity-70 group-hover:opacity-90"
-                    style={{ backgroundColor: p.enabled ? "rgba(99, 102, 241, 0.7)" : "rgba(255, 255, 255, 0.08)" }}
+                    key={p.path} 
+                    className="group flex items-center gap-4 px-4 py-1.5 border transition-all duration-500 backdrop-blur-md"
+                    style={{
+                      borderRadius: "var(--radius-lg)",
+                      backgroundColor: p.enabled ? "rgba(79, 70, 229, 0.04)" : "var(--surface-glass)",
+                      borderColor: p.enabled ? "rgba(99, 102, 241, 0.35)" : "var(--surface-border)",
+                      color: p.enabled ? "var(--text-main)" : "var(--text-faint)",
+                    }}
                   >
-                    <div className={`absolute top-1/2 left-0.5 w-2 h-2 rounded-full bg-white/90 transition-all duration-500 -translate-y-1/2 ${
-                      p.enabled ? 'translate-x-3' : 'translate-x-0'
-                    }`} />
+                    <div 
+                      onClick={() => togglePath(i)}
+                      className="w-7 h-3.5 rounded-full relative transition-all duration-500 cursor-pointer opacity-70 group-hover:opacity-90"
+                      style={{ backgroundColor: p.enabled ? "rgba(99, 102, 241, 0.7)" : "rgba(255, 255, 255, 0.08)" }}
+                    >
+                      <div className={`absolute top-1/2 left-0.5 w-2 h-2 rounded-full bg-white/90 transition-all duration-500 -translate-y-1/2 ${
+                        p.enabled ? 'translate-x-3' : 'translate-x-0'
+                      }`} />
+                    </div>
+                    <span className="text-[10px] font-mono tracking-tight opacity-60 group-hover:opacity-85">{p.path}</span>
+                    <button onClick={() => deletePath(p.path)} className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full transition-all text-red-300 hover:text-red-400">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
-                  <span className="text-[10px] font-mono tracking-tight opacity-60 group-hover:opacity-85">{p.path}</span>
-                  <button onClick={() => deletePath(p.path)} className="opacity-0 group-hover:opacity-100 w-5 h-5 flex items-center justify-center rounded-full transition-all text-red-300 hover:text-red-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ))
+                ))}
+              </>
             ) : (
               <p className="text-xs italic font-light tracking-widest" style={{ color: "var(--text-faint)" }}>등록된 궤도가 없습니다.</p>
             )}
@@ -98,15 +134,11 @@ export function OrbitDashboard() {
         </header>
 
         {/* ?? 프로젝트 그리드 (DnD Context 적용) */}
-        {projects.length > 0 ? (
-          <ProjectGrid projects={projects} onReorder={reorderProjects} />
-        ) : (
-          <div className="col-span-full py-20 text-center border-2 border-dashed rounded-[40px]" style={{ borderColor: "var(--surface-border)" }}>
-            <p className="font-light italic" style={{ color: "var(--text-faint)" }}>
-              {paths.some(p => p.enabled) ? "활성화된 궤도에 프로젝트가 없습니다." : "모든 궤도가 비활성화 상태입니다."}
-            </p>
-          </div>
-        )}
+        <ProjectGrid 
+          projects={projects} 
+          onReorder={reorderProjects} 
+          onAddProject={handleManualIgnition} // Manual ignition picker for specific projects
+        />
         
         {/* 제외된 항목 복구 푸터 */}
         {excluded.length > 0 && (
