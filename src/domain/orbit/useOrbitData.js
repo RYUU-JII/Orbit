@@ -32,7 +32,11 @@ export function useOrbitData() {
     results.forEach((result, index) => {
       const basePath = activePaths[index];
       if (result.status === "fulfilled" && Array.isArray(result.value)) {
-        allProjects = allProjects.concat(result.value);
+        const annotated = result.value.map((project) => ({
+          ...project,
+          source_path: basePath,
+        }));
+        allProjects = allProjects.concat(annotated);
         return;
       }
       if (result.status === "rejected") {
@@ -113,13 +117,42 @@ export function useOrbitData() {
     [scanProjects]
   );
 
-  const reorderProjects = useCallback(async (nextProjects) => {
-    const nextOrder = nextProjects.map((project) => project.path);
-    setProjects(nextProjects);
-    setProjectOrder(nextOrder);
-    projectOrderRef.current = nextOrder;
-    await saveOrbitSettings({ projectOrder: nextOrder });
-  }, []);
+  const reorderProjects = useCallback(
+    async (nextProjects, sourcePath) => {
+      if (!sourcePath) {
+        const nextOrder = nextProjects.map((project) => project.path);
+        setProjects(nextProjects);
+        setProjectOrder(nextOrder);
+        projectOrderRef.current = nextOrder;
+        await saveOrbitSettings({ projectOrder: nextOrder });
+        return;
+      }
+
+      const currentOrder = projectOrderRef.current;
+      const byPath = new Map(projects.map((project) => [project.path, project]));
+      const galaxyPaths = projects
+        .filter((project) => (project.source_path || project.sourcePath) === sourcePath)
+        .map((project) => project.path);
+      const galaxySet = new Set(galaxyPaths);
+      const nextGalaxyOrder = nextProjects.map((project) => project.path);
+
+      const trimmedOrder = currentOrder.filter((path) => !galaxySet.has(path));
+      const insertIndex = currentOrder.findIndex((path) => galaxySet.has(path));
+      const safeIndex = insertIndex === -1 ? trimmedOrder.length : insertIndex;
+      trimmedOrder.splice(safeIndex, 0, ...nextGalaxyOrder);
+
+      const nextOrder = trimmedOrder;
+      const nextSortedProjects = nextOrder
+        .map((path) => byPath.get(path))
+        .filter(Boolean);
+
+      setProjects(nextSortedProjects);
+      setProjectOrder(nextOrder);
+      projectOrderRef.current = nextOrder;
+      await saveOrbitSettings({ projectOrder: nextOrder });
+    },
+    [projects]
+  );
 
   const setProjectIde = useCallback((projectPath, ideId) => {
     setPreferredIdes((prev) => {
@@ -165,6 +198,10 @@ export function useOrbitData() {
   const excludeProject = useCallback(
     (projectPath) => {
       const updatedExcluded = [...new Set([...excluded, projectPath])];
+      const nextOrder = projectOrderRef.current.filter((path) => path !== projectPath);
+      projectOrderRef.current = nextOrder;
+      setProjectOrder(nextOrder);
+      void saveOrbitSettings({ projectOrder: nextOrder });
       void persistPaths(paths, updatedExcluded);
     },
     [excluded, paths, persistPaths]
