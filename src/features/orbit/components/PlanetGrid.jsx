@@ -40,7 +40,11 @@ export function PlanetGrid({
   const [displayProjects, setDisplayProjects] = useState(() => projects);
   const [vanishOverlays, setVanishOverlays] = useState([]);
   const vanishOverlayTimersRef = useRef(new Map());
-  const vanishingPathsRef = useRef(new Set());
+  const vanishOverlayPathsRef = useRef(new Set());
+  const exitingPathsRef = useRef(new Set());
+  const [exitingPaths, setExitingPaths] = useState({});
+  const [isSyncing, setIsSyncing] = useState(false);
+  const syncPendingRef = useRef(false);
   const gridItemRefs = useRef(new Map());
   const [appearStageByPath, setAppearStageByPath] = useState({});
   const appearTimersRef = useRef(new Map());
@@ -235,9 +239,10 @@ export function PlanetGrid({
 
   const createVanishOverlay = useCallback((project) => {
     const path = project?.path;
-    const node = path ? gridItemRefs.current.get(path) : null;
+    if (!path || vanishOverlayPathsRef.current.has(path)) return;
+    const node = gridItemRefs.current.get(path);
     const container = gridRef.current;
-    if (!path || !node || !container) return;
+    if (!node || !container) return;
 
     const nodeRect = node.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
@@ -252,11 +257,13 @@ export function PlanetGrid({
       height: nodeRect.height,
     };
 
+    vanishOverlayPathsRef.current.add(path);
     setVanishOverlays((prev) => prev.concat(overlay));
 
     const timeoutId = setTimeout(() => {
       setVanishOverlays((prev) => prev.filter((item) => item.key !== overlay.key));
       vanishOverlayTimersRef.current.delete(overlay.key);
+      vanishOverlayPathsRef.current.delete(path);
     }, 700);
     vanishOverlayTimersRef.current.set(overlay.key, timeoutId);
   }, []);
@@ -286,53 +293,91 @@ export function PlanetGrid({
     appearTimersRef.current.set(path, { start, cleanup });
   }, []);
 
-  const handleVanishStart = useCallback(
+  const handleVanishStart = useCallback((project) => {
+    if (!project?.path) return;
+    if (exitingPathsRef.current.has(project.path)) return;
+
+    exitingPathsRef.current.add(project.path);
+    setExitingPaths((prev) => (prev[project.path] ? prev : { ...prev, [project.path]: true }));
+  }, []);
+
+  const handleVanishComplete = useCallback(
     (project) => {
       if (!project?.path) return;
-      if (vanishingPathsRef.current.has(project.path)) return;
-
-      vanishingPathsRef.current.add(project.path);
       if (captureSnapshot) {
         captureSnapshot();
       }
-      createVanishOverlay(project);
-      setDisplayProjects((prev) => prev.filter((p) => p.path !== project.path));
-
-      const cleanupKey = `vanish:${project.path}`;
-      const cleanupId = setTimeout(() => {
-        vanishingPathsRef.current.delete(project.path);
-        vanishOverlayTimersRef.current.delete(cleanupKey);
-      }, 700);
-      vanishOverlayTimersRef.current.set(cleanupKey, cleanupId);
     },
-    [captureSnapshot, createVanishOverlay]
+    [captureSnapshot]
   );
 
   useLayoutEffect(() => {
-    setDisplayProjects((prev) => {
-      const incomingMap = new Map(projects.map((project) => [project.path, project]));
+    const prevPaths = displayProjects.map((project) => project.path);
+    const nextPaths = projects.map((project) => project.path);
+    const sameOrder =
+      prevPaths.length === nextPaths.length &&
+      prevPaths.every((path, index) => path === nextPaths[index]);
+    if (sameOrder) return;
 
-      prev.forEach((project) => {
-        if (!incomingMap.has(project.path) && !vanishingPathsRef.current.has(project.path)) {
-          createVanishOverlay(project);
-        }
+    const prevPathSet = new Set(prevPaths);
+    const nextPathSet = new Set(nextPaths);
+    const isReorder =
+      prevPathSet.size === nextPathSet.size && prevPaths.every((path) => nextPathSet.has(path));
+
+    if (!isReorder) {
+      const isManualExit = (path) => exitingPathsRef.current.has(path);
+
+      displayProjects.forEach((project) => {
+        if (nextPathSet.has(project.path)) return;
+        if (isManualExit(project.path)) return;
+        createVanishOverlay(project);
       });
 
-      const next = projects.filter((project) => !vanishingPathsRef.current.has(project.path));
-      const prevPaths = new Set(prev.map((project) => project.path));
-      next.forEach((project) => {
-        if (!prevPaths.has(project.path)) {
+      projects.forEach((project) => {
+        if (!prevPathSet.has(project.path)) {
           scheduleAppear(project.path);
         }
       });
-      return next;
-    });
-  }, [createVanishOverlay, projects, scheduleAppear]);
+
+      if (!syncPendingRef.current) {
+        syncPendingRef.current = true;
+        setIsSyncing(true);
+      }
+    }
+
+    setDisplayProjects(projects);
+  }, [createVanishOverlay, displayProjects, projects, scheduleAppear]);
 
   useEffect(() => {
-    if (!markLayoutShift) return;
-    if (performance.now() < skipOrchestratorUntilRef.current) return;
-    markLayoutShift();
+    const currentPaths = new Set(projects.map((project) => project.path));
+    const displayPaths = new Set(displayProjects.map((project) => project.path));
+    const isSynced =
+      currentPaths.size === displayPaths.size &&
+      Array.from(currentPaths).every((path) => displayPaths.has(path));
+    if (!isSynced) return;
+    setExitingPaths((current) => {
+      let changed = false;
+      const next = { ...current };
+      Object.keys(next).forEach((path) => {
+        if (!currentPaths.has(path)) {
+          delete next[path];
+          exitingPathsRef.current.delete(path);
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+  }, [displayProjects, projects]);
+
+  useLayoutEffect(() => {
+    const shouldSkip = performance.now() < skipOrchestratorUntilRef.current;
+    if (!shouldSkip && markLayoutShift) {
+      markLayoutShift();
+    }
+    if (syncPendingRef.current) {
+      syncPendingRef.current = false;
+      setIsSyncing(false);
+    }
   }, [displayProjects, markLayoutShift]);
 
   useEffect(() => {
@@ -371,6 +416,7 @@ export function PlanetGrid({
     return () => {
       vanishOverlayTimersRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
       vanishOverlayTimersRef.current.clear();
+      vanishOverlayPathsRef.current.clear();
       appearTimersRef.current.forEach(({ start, cleanup }) => {
         clearTimeout(start);
         clearTimeout(cleanup);
@@ -408,12 +454,18 @@ export function PlanetGrid({
         data-galaxy-id={galaxyId}
       >
         {showEmptyPlaceholder ? (
-          <div className="rounded-[var(--radius-lg)] border border-white/5 bg-white/[0.02] px-6 py-12 text-center text-xs uppercase tracking-[0.25em] text-white/30">
+          <div
+            className="rounded-[var(--radius-lg)] border border-white/5 bg-white/[0.02] px-6 py-12 text-center text-xs uppercase tracking-[0.25em] text-white/30"
+            style={{ opacity: isSyncing ? 0 : 1 }}
+          >
             No planets detected in this galaxy.
           </div>
         ) : (
           <SortableContext items={projectIds} strategy={rectSortingStrategy}>
-            <main className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <main
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+              style={{ opacity: isSyncing ? 0 : 1 }}
+            >
               {(() => {
                 let appearIndex = 0;
                 return displayProjects.map((project) => {
@@ -430,6 +482,7 @@ export function PlanetGrid({
                       }
                     : undefined;
                   const isActive = activeId === project.path;
+                  const isExiting = Boolean(exitingPaths[project.path]);
                   const shouldSkipOrchestrator = isCollapsing || isActive;
 
                   return (
@@ -442,16 +495,17 @@ export function PlanetGrid({
                       data-orbit-planet={project.path}
                       data-orbit-skip={shouldSkipOrchestrator ? "true" : undefined}
                       data-galaxy-id={galaxyId}
-                      style={{ width: "100%" }}
+                      style={{ width: "100%", willChange: "transform" }}
                     >
                       <div className={slotClassName} style={{ width: "100%" }}>
                         <div className={innerClassName} style={innerStyle}>
                           <ProjectCard
                             project={project}
-                          isSorting={isDragging}
-                          isDropTarget={isDragging && overId === project.path && overId !== activeId}
-                            isVanishing={isCollapsing}
+                            isSorting={isDragging}
+                            isDropTarget={isDragging && overId === project.path && overId !== activeId}
+                            isVanishing={isCollapsing || isExiting}
                             onVanishStart={handleVanishStart}
+                            onVanishComplete={handleVanishComplete}
                           />
                         </div>
                       </div>

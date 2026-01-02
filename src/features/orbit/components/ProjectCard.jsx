@@ -256,21 +256,21 @@ export function ProjectCard({
   isDropTarget = false,
   isVanishing: isVanishingProp = false,
   onVanishStart = noop,
+  onVanishComplete = noop,
 }) {
   const [showMenu, setShowMenu] = useState(false);
   const [isVanishingLocal, setIsVanishingLocal] = useState(false);
   const { excludeProject, preferredIdes, setProjectIde } = useOrbitContext();
   const pressStartedAtRef = useRef(0);
-  const vanishTimeoutRef = useRef(null);
+  const hasVanishCompleteRef = useRef(false);
+  const dragActiveRef = useRef(false);
   const isVanishing = isVanishingProp || isVanishingLocal;
 
   useEffect(() => {
-    return () => {
-      if (vanishTimeoutRef.current && !isVanishingLocal) {
-        clearTimeout(vanishTimeoutRef.current);
-      }
-    };
-  }, [isVanishingLocal]);
+    if (!isVanishing) {
+      hasVanishCompleteRef.current = false;
+    }
+  }, [isVanishing]);
 
   const autoDetectedIde = project.ides?.includes("jetbrains") ? resolveJetBrainsIde(project.techs) : (project.ides?.[0] || "vscode");
   const activeIdeId = preferredIdes[project.path] || autoDetectedIde;
@@ -301,15 +301,21 @@ export function ProjectCard({
     invoke("open_in_explorer", { path: project.path });
   };
 
+  const dragDisabled = isVanishing && !dragActiveRef.current;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: project.path,
-    disabled: isVanishing,
+    disabled: dragDisabled,
     animateLayoutChanges: ({ isDragging, isSorting }) => isDragging || isSorting,
   });
+
+  useEffect(() => {
+    dragActiveRef.current = isDragging;
+  }, [isDragging]);
 
   const dndStyle = {
     transform: CSS.Transform.toString(transform),
     transition: isDragging ? "none" : transition,
+    transitionDelay: "0ms",
     zIndex: isDragging ? 100 : "auto",
     opacity: isDragging ? 0 : 1,
     willChange: "transform, box-shadow",
@@ -328,9 +334,6 @@ export function ProjectCard({
         if (isVanishing) return;
         setIsVanishingLocal(true);
         onVanishStart(project);
-        vanishTimeoutRef.current = setTimeout(() => {
-          excludeProject(project.path);
-        }, 700);
       }}
       onSetIde={setProjectIde}
       onOpenProject={handleOpenProject}
@@ -339,6 +342,20 @@ export function ProjectCard({
       disableHoverMotion={isSorting}
       isDropTarget={isDropTarget}
       isVanishing={isVanishing}
+      cardProps={{
+        onAnimationEnd: (event) => {
+          event.stopPropagation();
+          if (event.target !== event.currentTarget) return;
+          if (!isVanishing) return;
+          if (hasVanishCompleteRef.current) return;
+          if (event.animationName !== "card-singularity-warp") return;
+          hasVanishCompleteRef.current = true;
+          onVanishComplete(project);
+          requestAnimationFrame(() => {
+            excludeProject(project.path);
+          });
+        },
+      }}
       outerProps={{
         ref: setNodeRef,
         style: dndStyle,
